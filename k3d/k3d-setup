@@ -1,0 +1,27 @@
+#!/bin/bash
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+# create cluster with a single node with the traefik ingress controller is listening on a host port
+k3d cluster create --api-port 6550 -p "8081:80@loadbalancer" --agents 2 gorestapp
+
+# create namespace for argocd on the cluster and install argocd in it
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# deploy config map to allow insecure mode for argocd and then restart the argocd server
+kubectl apply -n argocd -f $SCRIPT_DIR/argocd-config.yaml
+kubectl rollout -n argocd restart deployment argocd-server
+
+# deploy ingress controller to be able to access argocd
+kubectl apply -n argocd -f $SCRIPT_DIR/argocd-ingress.yaml
+
+# retreive the password for argocd from the secret created 
+ARGOCD_PWD=`kubectl get secret -n argocd argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
+echo "Make an entry into your hosts file for argocd.gorestapp.cluster."
+echo "Point browser to http://argocd.gorestapp.cluster:8081"
+echo "Logon with user:admin, pw:$ARGOCD_PWD"
+
+
+
+
